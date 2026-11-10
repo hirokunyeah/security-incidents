@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>セキュリティインシデント台帳</title>
+<meta name="description" content="国内外で公表された情報漏えい・不正アクセス・ランサムウェア等のセキュリティインシデントを毎日集約する公開台帳。影響範囲・組織の対策・利用者が取るべき対応をまとめています。">
+<meta property="og:title" content="セキュリティインシデント台帳">
+<meta property="og:description" content="国内外で公表された情報漏えい・不正アクセス等の事案を毎日集約。利用者の必須対応つき。">
+<meta property="og:type" content="website">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&family=BIZ+UDPMincho&display=swap" rel="stylesheet">
+<style>
+:root {
+  color-scheme: light dark;
+  --font-anthropic-sans: "BIZ UDPGothic", system-ui, sans-serif;
+  --font-anthropic-serif: "BIZ UDPGothic", system-ui, sans-serif;
+  --color-fg: #1f1e1c; --color-fg-muted: #6b6862; --color-bg: #faf9f5; --color-panel: #ffffff;
+  --color-border-line: #e3e0d8; --color-ok: #2f7d4f; --color-warn: #a35a00; --color-bad: #b3261e; --color-link: #2459a8;
+  --series-0: #3b6fb6;
+  --cds-pad-xs: 4px; --cds-pad-sm: 8px; --cds-pad-md: 12px; --cds-pad-lg: 20px;
+  --cds-gap-xs: 4px; --cds-gap-sm: 8px; --cds-gap-md: 16px; --cds-gap-lg: 24px;
+  --cds-font-size-title: 2rem; --cds-font-size-heading: 1.125rem; --cds-font-size-body: .95rem; --cds-font-size-caption: .82rem;
+  --cds-font-weight-medium: 700; --cds-radius: 8px; --cds-dur-slow: .3s;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --color-fg: #ecebe6; --color-fg-muted: #a3a09a; --color-bg: #1c1b19; --color-panel: #262522;
+    --color-border-line: #3a3935; --color-ok: #6cc08f; --color-warn: #e0a24f; --color-bad: #f08a80; --color-link: #8fb4ee;
+    --series-0: #7aa5e3;
+  }
+}
+:root[data-theme="dark"] {
+  --color-fg: #ecebe6; --color-fg-muted: #a3a09a; --color-bg: #1c1b19; --color-panel: #262522;
+  --color-border-line: #3a3935; --color-ok: #6cc08f; --color-warn: #e0a24f; --color-bad: #f08a80; --color-link: #8fb4ee;
+  --series-0: #7aa5e3;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--color-bg); color: var(--color-fg); font-family: var(--font-anthropic-sans); line-height: 1.6; }
+#dash-root { padding: var(--cds-pad-lg) 16px 48px; }
+a { color: var(--color-link); }
+.site-foot { max-width: 1280px; margin: var(--cds-gap-lg) auto 0; font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); border-top: 1px solid var(--color-border-line); padding-top: var(--cds-pad-md); }
+.site-foot p { margin: 0 0 6px; }
+.dash-skeleton { opacity: .4; }
+@media (max-width: 640px) { :root { --cds-font-size-title: 1.6rem; } }
+</style>
+<script>
+/* Minimal stand-in for the dashboard runtime so the original page code runs as a static site. */
+(function () {
+  const raw = {}, calcs = {}, listeners = [];
+  const out = (id) => {
+    if (calcs[id]) {
+      const c = calcs[id];
+      if (!c.inputs.every((i) => raw[i] || calcs[i])) return { status: 'loading', data: [] };
+      const ins = c.inputs.map((i) => out(i));
+      if (ins.some((x) => x.status !== 'ok')) return { status: 'loading', data: [] };
+      try { return { status: 'ok', data: c.fn(...ins.map((x) => x.data)) }; } catch (e) { return { status: 'error', data: [], message: String(e) }; }
+    }
+    if (raw[id] instanceof Error) return { status: 'error', data: [], message: String(raw[id]) };
+    return raw[id] ? { status: 'ok', data: raw[id] } : { status: 'loading', data: [] };
+  };
+  window.d3 = { max: (arr, f) => arr.length ? Math.max(...arr.map(f || ((x) => x))) : undefined };
+  window.dash = {
+    colors: [getComputedStyle(document.documentElement).getPropertyValue('--series-0').trim() || '#3b6fb6'],
+    calc: (id, def) => { calcs[id] = def; },
+    loader: () => {},
+    data: out,
+    onData: (fn) => { listeners.push(fn); fn(); },
+    _fire: () => listeners.forEach((fn) => fn()),
+    _set: (id, rows) => { raw[id] = rows; },
+  };
+  const load = (id) => fetch('data/' + id + '.json', { cache: 'no-cache' })
+    .then((r) => r.json()).then((j) => { dash._set(id, Array.isArray(j) ? j : j.rows); })
+    .catch((e) => { dash._set(id, e); });
+  window.addEventListener('DOMContentLoaded', () => {
+    Promise.all([load('incidents'), load('changelog')]).then(() => {
+      dash.colors[0] = getComputedStyle(document.documentElement).getPropertyValue('--series-0').trim() || dash.colors[0];
+      dash._fire();
+    });
+  });
+  let w = innerWidth; addEventListener('resize', () => { if (innerWidth !== w) { w = innerWidth; dash._fire(); } });
+})();
+</script>
+</head>
+<body>
+<div id="dash-root">
+<!--PAGE-->
+<footer class="site-foot">
+  <p>最終更新：<!--UPDATED-->（毎日の定期チェックで更新）</p>
+  <p>各事案は公開報道・各組織の発表・集約サイトをもとに整理したものです。正確な情報は各事案の出典と、当該組織の公式発表をご確認ください。「未確認」は攻撃者側の主張のみで、組織が認めていない事案です。</p>
+  <p>データ：<a href="data/incidents.json">incidents.json</a> ・ <a href="data/changelog.json">changelog.json</a></p>
+</footer>
+</div>
+</body>
+</html>

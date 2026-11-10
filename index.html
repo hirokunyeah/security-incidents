@@ -1,0 +1,419 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>セキュリティインシデント台帳</title>
+<meta name="description" content="国内外で公表された情報漏えい・不正アクセス・ランサムウェア等のセキュリティインシデントを毎日集約する公開台帳。影響範囲・組織の対策・利用者が取るべき対応をまとめています。">
+<meta property="og:title" content="セキュリティインシデント台帳">
+<meta property="og:description" content="国内外で公表された情報漏えい・不正アクセス等の事案を毎日集約。利用者の必須対応つき。">
+<meta property="og:type" content="website">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&family=BIZ+UDPMincho&display=swap" rel="stylesheet">
+<style>
+:root {
+  color-scheme: light dark;
+  --font-anthropic-sans: "BIZ UDPGothic", system-ui, sans-serif;
+  --font-anthropic-serif: "BIZ UDPGothic", system-ui, sans-serif;
+  --color-fg: #1f1e1c; --color-fg-muted: #6b6862; --color-bg: #faf9f5; --color-panel: #ffffff;
+  --color-border-line: #e3e0d8; --color-ok: #2f7d4f; --color-warn: #a35a00; --color-bad: #b3261e; --color-link: #2459a8;
+  --series-0: #3b6fb6;
+  --cds-pad-xs: 4px; --cds-pad-sm: 8px; --cds-pad-md: 12px; --cds-pad-lg: 20px;
+  --cds-gap-xs: 4px; --cds-gap-sm: 8px; --cds-gap-md: 16px; --cds-gap-lg: 24px;
+  --cds-font-size-title: 2rem; --cds-font-size-heading: 1.125rem; --cds-font-size-body: .95rem; --cds-font-size-caption: .82rem;
+  --cds-font-weight-medium: 700; --cds-radius: 8px; --cds-dur-slow: .3s;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --color-fg: #ecebe6; --color-fg-muted: #a3a09a; --color-bg: #1c1b19; --color-panel: #262522;
+    --color-border-line: #3a3935; --color-ok: #6cc08f; --color-warn: #e0a24f; --color-bad: #f08a80; --color-link: #8fb4ee;
+    --series-0: #7aa5e3;
+  }
+}
+:root[data-theme="dark"] {
+  --color-fg: #ecebe6; --color-fg-muted: #a3a09a; --color-bg: #1c1b19; --color-panel: #262522;
+  --color-border-line: #3a3935; --color-ok: #6cc08f; --color-warn: #e0a24f; --color-bad: #f08a80; --color-link: #8fb4ee;
+  --series-0: #7aa5e3;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--color-bg); color: var(--color-fg); font-family: var(--font-anthropic-sans); line-height: 1.6; }
+#dash-root { padding: var(--cds-pad-lg) 16px 48px; }
+a { color: var(--color-link); }
+.site-foot { max-width: 1280px; margin: var(--cds-gap-lg) auto 0; font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); border-top: 1px solid var(--color-border-line); padding-top: var(--cds-pad-md); }
+.site-foot p { margin: 0 0 6px; }
+.dash-skeleton { opacity: .4; }
+@media (max-width: 640px) { :root { --cds-font-size-title: 1.6rem; } }
+</style>
+<script>
+/* Minimal stand-in for the dashboard runtime so the original page code runs as a static site. */
+(function () {
+  const raw = {}, calcs = {}, listeners = [];
+  const out = (id) => {
+    if (calcs[id]) {
+      const c = calcs[id];
+      if (!c.inputs.every((i) => raw[i] || calcs[i])) return { status: 'loading', data: [] };
+      const ins = c.inputs.map((i) => out(i));
+      if (ins.some((x) => x.status !== 'ok')) return { status: 'loading', data: [] };
+      try { return { status: 'ok', data: c.fn(...ins.map((x) => x.data)) }; } catch (e) { return { status: 'error', data: [], message: String(e) }; }
+    }
+    if (raw[id] instanceof Error) return { status: 'error', data: [], message: String(raw[id]) };
+    return raw[id] ? { status: 'ok', data: raw[id] } : { status: 'loading', data: [] };
+  };
+  window.d3 = { max: (arr, f) => arr.length ? Math.max(...arr.map(f || ((x) => x))) : undefined };
+  window.dash = {
+    colors: [getComputedStyle(document.documentElement).getPropertyValue('--series-0').trim() || '#3b6fb6'],
+    calc: (id, def) => { calcs[id] = def; },
+    loader: () => {},
+    data: out,
+    onData: (fn) => { listeners.push(fn); fn(); },
+    _fire: () => listeners.forEach((fn) => fn()),
+    _set: (id, rows) => { raw[id] = rows; },
+  };
+  const load = (id) => fetch('data/' + id + '.json', { cache: 'no-cache' })
+    .then((r) => r.json()).then((j) => { dash._set(id, Array.isArray(j) ? j : j.rows); })
+    .catch((e) => { dash._set(id, e); });
+  window.addEventListener('DOMContentLoaded', () => {
+    Promise.all([load('incidents'), load('changelog')]).then(() => {
+      dash.colors[0] = getComputedStyle(document.documentElement).getPropertyValue('--series-0').trim() || dash.colors[0];
+      dash._fire();
+    });
+  });
+  let w = innerWidth; addEventListener('resize', () => { if (innerWidth !== w) { w = innerWidth; dash._fire(); } });
+})();
+</script>
+</head>
+<body>
+<div id="dash-root">
+<style>
+#dash-root { --dash-gutter: var(--cds-pad-lg); }
+.lx { font-family: var(--font-anthropic-sans); display: flex; flex-direction: column; gap: var(--cds-gap-lg); max-width: 1280px; margin-inline: auto; }
+.lx h1 { font-family: var(--font-anthropic-serif); font-weight: 400; font-size: var(--cds-font-size-title); margin: 0; text-wrap: balance; }
+.lx h2 { font-size: var(--cds-font-size-heading); font-weight: var(--cds-font-weight-medium); margin: 0; }
+.lx .note { color: var(--color-fg-muted); font-size: var(--cds-font-size-caption); margin: 0; }
+.lx .take { margin: var(--cds-gap-xs) 0 0; color: var(--color-fg-muted); }
+.lx .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr)); gap: var(--cds-gap-md); }
+.lx .card { background: var(--color-panel); border: 1px solid var(--color-border-line); border-radius: var(--cds-radius); padding: var(--cds-pad-lg); display: flex; flex-direction: column; gap: var(--cds-gap-sm); min-width: 0; }
+.lx .kpi .v { font-family: var(--font-anthropic-serif); font-weight: 400; font-size: var(--cds-font-size-title); font-variant-numeric: tabular-nums; }
+.lx .kpi .l { font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); }
+.lx .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr)); gap: var(--cds-gap-md); }
+.lx .bars { display: flex; flex-direction: column; gap: var(--cds-gap-xs); min-height: 8rem; }
+.lx .bar { display: grid; grid-template-columns: minmax(6rem, 9rem) 1fr 3rem; align-items: center; gap: var(--cds-gap-sm); font-size: var(--cds-font-size-caption); cursor: pointer; background: none; border: 0; padding: 2px 0; color: inherit; text-align: left; font-family: inherit; }
+.lx .bar:hover .fill, .lx .bar.on .fill { opacity: 1; }
+.lx .bar .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lx .bar .track { height: 14px; }
+.lx .bar .fill { height: 100%; border-radius: 4px; opacity: .85; min-width: 2px; }
+.lx .bar .n { text-align: right; font-variant-numeric: tabular-nums; }
+.lx .tools { display: flex; flex-wrap: wrap; gap: var(--cds-gap-sm); align-items: center; }
+.lx .tools input, .lx .tools select { font: inherit; font-size: var(--cds-font-size-caption); padding: var(--cds-pad-xs) var(--cds-pad-sm); border: 1px solid var(--color-border-line); border-radius: var(--cds-radius); background: var(--color-bg); color: var(--color-fg); min-width: 0; }
+.lx .tools input { flex: 1 1 14rem; }
+.lx .tools button { font: inherit; font-size: var(--cds-font-size-caption); padding: var(--cds-pad-xs) var(--cds-pad-sm); border: 1px solid var(--color-border-line); border-radius: var(--cds-radius); background: var(--color-bg); color: var(--color-fg); cursor: pointer; }
+.lx .tbox { max-height: 34rem; overflow: auto; }
+.lx table { width: 100%; border-collapse: collapse; font-size: var(--cds-font-size-caption); font-variant-numeric: tabular-nums; }
+.lx th { position: sticky; top: 0; background: var(--color-panel); text-align: left; font-weight: var(--cds-font-weight-medium); color: var(--color-fg-muted); padding: var(--cds-pad-xs) var(--cds-pad-sm); border-bottom: 1px solid var(--color-border-line); white-space: nowrap; cursor: pointer; }
+.lx td { padding: var(--cds-pad-xs) var(--cds-pad-sm); border-bottom: 1px solid var(--color-border-line); vertical-align: top; }
+.lx tbody tr { cursor: pointer; }
+.lx tbody tr:hover, .lx tbody tr.sel { background: var(--color-bg); }
+.lx td.num { text-align: right; white-space: nowrap; }
+.lx .pill { display: inline-block; padding: 0 6px; border-radius: 999px; border: 1px solid currentColor; font-size: var(--cds-font-size-caption); white-space: nowrap; }
+.lx .p-new { color: var(--color-ok); }
+.lx .p-upd { color: var(--color-warn); }
+.lx .p-fin { color: var(--color-fg-muted); }
+.lx .p-claim { color: var(--color-bad); }
+.lx .detail dl { display: grid; grid-template-columns: 8rem 1fr; gap: var(--cds-gap-xs) var(--cds-gap-md); margin: 0; font-size: var(--cds-font-size-body); }
+.lx .detail dt { color: var(--color-fg-muted); font-size: var(--cds-font-size-caption); }
+.lx .detail dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.lx .detail ol { margin: 0; padding-left: 1.2rem; display: flex; flex-direction: column; gap: var(--cds-gap-xs); }
+.lx .advice { border: 1px solid var(--color-warn); border-radius: var(--cds-radius); padding: var(--cds-pad-md); }
+.lx .advice h3 { margin: 0 0 var(--cds-gap-xs); font-size: var(--cds-font-size-body); color: var(--color-warn); }
+.lx .hide-n { }
+@media (max-width: 640px) { .lx .hide-n { display: none; } .lx .detail dl { grid-template-columns: 1fr; } }
+[data-dash-source-state=refreshing] { opacity: .5; transition: opacity var(--cds-dur-slow); }
+</style>
+
+<div class="lx">
+  <header id="top">
+    <h1>セキュリティインシデント台帳</h1>
+    <p class="take" id="takeaway" data-source="kpis" data-field="latest">—</p>
+  </header>
+
+  <section class="kpis" id="kpis">
+    <div class="card kpi"><span class="l">登録インシデント</span><span class="v" data-source="kpis" data-field="total">—</span><span class="note">台帳の累計</span></div>
+    <div class="card kpi"><span class="l">最新チェックで新規登録</span><span class="v" data-source="kpis" data-field="new_latest">—</span><span class="note" id="k-date">—</span></div>
+    <div class="card kpi"><span class="l">続報・最終報あり</span><span class="v" data-source="kpis" data-field="with_updates">—</span><span class="note">公表後に第2報以降が出たもの</span></div>
+    <div class="card kpi"><span class="l">判明した影響件数（合計）</span><span class="v" data-source="kpis" data-field="records_sum">—</span><span class="note">件・人の単位混在、攻撃者主張を除く</span></div>
+  </section>
+
+  <section class="card" id="today">
+    <h2 id="today-h">最新チェックの新規・続報</h2>
+    <p class="note">直近の定期チェックで新しく登録した事案と、続報を反映した事案。行をクリックで詳細へ。</p>
+    <div class="tbox" style="max-height: 22rem">
+      <table data-source="today_log" data-row-key="key">
+        <thead><tr><th data-field="kind">区分</th><th data-field="org">組織</th><th data-field="note">内容</th></tr></thead>
+        <tbody id="today-body"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="card" id="updates">
+    <h2>続報・アップデート</h2>
+    <p class="note">第2報・最終報・追記が出た事案。最新の報告日順。</p>
+    <div class="tbox" style="max-height: 22rem">
+      <table data-source="updates" data-row-key="id">
+        <thead><tr><th data-field="last_report">最新報</th><th data-field="org">組織</th><th data-field="status">状況</th><th data-field="update_note">続報の内容</th></tr></thead>
+        <tbody id="upd-body"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="grid" id="stats">
+    <div class="card" id="c-attack"><h2>攻撃・原因の種類</h2><p class="note">クリックで一覧を絞り込み</p><div class="bars" data-source="by_attack" id="b-attack"></div></div>
+    <div class="card" id="c-cat"><h2>サービスカテゴリ</h2><p class="note">クリックで一覧を絞り込み</p><div class="bars" data-source="by_category" id="b-cat"></div></div>
+    <div class="card" id="c-region"><h2>国・地域</h2><p class="note">クリックで一覧を絞り込み</p><div class="bars" data-source="by_country" id="b-region"></div></div>
+  </section>
+
+  <section class="card" id="list">
+    <h2>インシデント一覧</h2>
+    <p class="note">行をクリックすると、影響範囲・対策・利用者の必須対応を表示します。</p>
+    <div class="tools">
+      <input id="q" type="search" placeholder="組織名・サービス・漏えい情報で検索" aria-label="検索">
+      <select id="f-status" aria-label="状況"><option value="">すべての状況</option><option>新規</option><option>続報あり</option><option>最終報</option></select>
+      <button id="clear" type="button" hidden>絞り込み解除</button>
+    </div>
+    <div class="tbox">
+      <table data-source="incidents" data-row-key="id" id="tbl">
+        <thead><tr>
+          <th data-field="published" data-k="published">公表日</th>
+          <th data-field="org" data-k="org">組織・サービス</th>
+          <th data-field="country" data-k="country" class="hide-n">国</th>
+          <th data-field="category" data-k="category" class="hide-n">カテゴリ</th>
+          <th data-field="attack" data-k="attack" class="hide-n">種類</th>
+          <th data-field="records" data-k="records">影響件数</th>
+          <th data-field="status" data-k="status">状況</th>
+        </tr></thead>
+        <tbody id="tb"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="card detail" id="detail">
+    <h2 id="d-title">インシデント詳細</h2>
+    <p class="note" id="d-hint">一覧の行を選ぶと表示されます。</p>
+    <div id="d-body" hidden>
+      <dl>
+        <dt>発生</dt><dd id="d-occ"></dd>
+        <dt>発覚</dt><dd id="d-disc"></dd>
+        <dt>公表 / 最新報</dt><dd id="d-pub"></dd>
+        <dt>国・地域</dt><dd id="d-ctry"></dd>
+        <dt>カテゴリ</dt><dd id="d-cat"></dd>
+        <dt>種類・経路</dt><dd id="d-atk"></dd>
+        <dt>事故内容（漏えい情報）</dt><dd id="d-data"></dd>
+        <dt>影響範囲</dt><dd id="d-imp"></dd>
+        <dt>組織の対策</dt><dd id="d-meas"></dd>
+        <dt>続報</dt><dd id="d-upd"></dd>
+        <dt>情報の確度</dt><dd id="d-ver"></dd>
+        <dt>出典</dt><dd id="d-src"></dd>
+      </dl>
+      <div class="advice" style="margin-top: var(--cds-gap-md)">
+        <h3>利用者の必須対応</h3>
+        <ol id="d-adv"></ol>
+      </div>
+    </div>
+  </section>
+  <p class="note">毎日の定期チェックで追記・更新されます。件数は各社公表の最大値で、単位（件・人）は統一されていません。</p>
+</div>
+
+<script>
+const famOf = (a) => /ランサム/.test(a) ? 'ランサムウェア' : /委託/.test(a) ? '委託先経由' : /脆弱性/.test(a) ? '脆弱性の悪用' : /認証|不正ログイン/.test(a) ? '認証情報の悪用' : /不正アクセス/.test(a) ? '不正アクセス' : 'その他';
+window.lxFam = famOf;
+dash.calc('kpis', {
+  inputs: ['incidents'], title: '台帳の集計', description: '登録件数、最新チェック日の新規数、続報数、影響件数の合計（攻撃者主張を除く）。',
+  fn: (incidents) => {
+    const latest = incidents.map((r) => r.first_seen).sort().pop() || '';
+    return [{
+      total: incidents.length,
+      latest,
+      new_latest: incidents.filter((r) => r.first_seen === latest).length,
+      with_updates: incidents.filter((r) => r.status === '続報あり' || r.status === '最終報').length,
+      records_sum: incidents.filter((r) => !/主張/.test(r.verified)).reduce((s, r) => s + (Number(r.records) || 0), 0),
+    }];
+  },
+});
+dash.calc('by_attack', {
+  inputs: ['incidents'], title: '種類別の件数', description: '攻撃・原因を6分類にまとめた件数。',
+  fn: (incidents) => {
+    const fam = (a) => /ランサム/.test(a) ? 'ランサムウェア' : /委託/.test(a) ? '委託先経由' : /脆弱性/.test(a) ? '脆弱性の悪用' : /認証|不正ログイン/.test(a) ? '認証情報の悪用' : /不正アクセス/.test(a) ? '不正アクセス' : 'その他';
+    const m = new Map(); incidents.forEach((r) => { const k = fam(r.attack); m.set(k, (m.get(k) || 0) + 1); });
+    return [...m].map(([key, n]) => ({ key, n })).sort((a, b) => b.n - a.n);
+  },
+});
+dash.calc('by_category', {
+  inputs: ['incidents'], title: 'カテゴリ別の件数', description: 'サービスカテゴリごとの件数。',
+  fn: (incidents) => {
+    const m = new Map(); incidents.forEach((r) => m.set(r.category, (m.get(r.category) || 0) + 1));
+    return [...m].map(([key, n]) => ({ key, n })).sort((a, b) => b.n - a.n);
+  },
+});
+dash.calc('by_country', {
+  inputs: ['incidents'], title: '国別の件数', description: '国ごとの件数（地域付き）。',
+  fn: (incidents) => {
+    const m = new Map(); incidents.forEach((r) => { const k = r.country; const o = m.get(k) || { key: k, region: r.region, n: 0 }; o.n += 1; m.set(k, o); });
+    return [...m.values()].sort((a, b) => b.n - a.n);
+  },
+});
+dash.calc('updates', {
+  inputs: ['incidents'], title: '続報のある事案', description: '状況が「続報あり」「最終報」の事案を最新報の日付順に。',
+  fn: (incidents) => incidents.filter((r) => r.status === '続報あり' || r.status === '最終報')
+    .map((r) => ({ id: r.id, last_report: r.last_report, org: r.org, status: r.status, update_note: r.update_note }))
+    .sort((a, b) => String(b.last_report).localeCompare(String(a.last_report))),
+});
+
+dash.calc('today_log', {
+  inputs: ['changelog'], title: '最新チェックの記録', description: 'チェック履歴のうち最新日付の行（続報反映を先頭に）。',
+  fn: (changelog) => {
+    const latest = changelog.map((r) => r.date).sort().pop() || '';
+    return changelog.filter((r) => r.date === latest)
+      .map((r) => ({ key: r.key, date: r.date, id: r.id, kind: r.kind, org: r.org, note: r.note }))
+      .sort((a, b) => (a.kind === b.kind ? 0 : a.kind === '続報反映' ? -1 : 1));
+  },
+});
+
+const st = { q: '', status: '', filt: null, sel: null, sortK: 'published', dir: -1 };
+const fmtN = (n) => n == null || n === '' ? '—' : n >= 1e4 ? (Math.round(n / 1e3) / 10).toLocaleString('ja-JP') + '万' : Number(n).toLocaleString('ja-JP');
+const pill = (s, ver) => {
+  const sp = document.createElement('span');
+  sp.className = 'pill ' + (s === '新規' ? 'p-new' : s === '最終報' ? 'p-fin' : 'p-upd');
+  sp.textContent = s;
+  return sp;
+};
+
+function bars(el, id, kind) {
+  const d = dash.data(id);
+  el.replaceChildren();
+  if (d.status !== 'ok') { el.classList.toggle('dash-skeleton', d.status === 'loading'); return; }
+  el.classList.remove('dash-skeleton');
+  const max = d3.max(d.data, (r) => r.n) || 1;
+  d.data.forEach((r, i) => {
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'bar' + (st.filt && st.filt.kind === kind && st.filt.v === r.key ? ' on' : '');
+    const nm = document.createElement('span'); nm.className = 'name'; nm.textContent = r.region ? `${r.key}（${r.region}）` : r.key;
+    const tr = document.createElement('span'); tr.className = 'track';
+    const f = document.createElement('span'); f.className = 'fill'; f.style.display = 'block';
+    f.style.width = (r.n / max * 100) + '%'; f.style.background = dash.colors[0];
+    tr.append(f);
+    const n = document.createElement('span'); n.className = 'n'; n.textContent = r.n;
+    b.append(nm, tr, n);
+    b.addEventListener('click', () => { st.filt = (st.filt && st.filt.kind === kind && st.filt.v === r.key) ? null : { kind, v: r.key }; draw(); document.getElementById('list').scrollIntoView({ block: 'start' }); });
+    el.append(b);
+  });
+}
+
+function showDetail(r) {
+  const body = document.getElementById('d-body');
+  if (!r) { body.hidden = true; document.getElementById('d-hint').hidden = false; document.getElementById('d-title').textContent = 'インシデント詳細'; return; }
+  body.hidden = false; document.getElementById('d-hint').hidden = true;
+  document.getElementById('d-title').textContent = `${r.org}（${r.service}）`;
+  const set = (id, v) => { document.getElementById(id).textContent = v || '不明・未公表'; };
+  set('d-occ', r.occurred); set('d-disc', r.discovered);
+  set('d-pub', `${r.published || '—'} / ${r.last_report || '—'}`);
+  set('d-ctry', `${r.country}（${r.region}）`); set('d-cat', r.category);
+  set('d-atk', r.vector ? `${r.attack}：${r.vector}` : r.attack);
+  set('d-data', r.data); set('d-imp', r.impact); set('d-meas', r.measures);
+  set('d-upd', r.update_note || 'なし'); set('d-ver', r.verified);
+  const src = document.getElementById('d-src'); src.replaceChildren();
+  if (r.source) { const a = document.createElement('a'); a.href = r.source; a.target = '_blank'; a.rel = 'noopener'; a.textContent = r.source; src.append(a); }
+  const ol = document.getElementById('d-adv'); ol.replaceChildren();
+  String(r.user_actions || '').split(' / ').filter(Boolean).forEach((t) => { const li = document.createElement('li'); li.textContent = t; ol.append(li); });
+}
+
+function draw() {
+  const k = dash.data('kpis');
+  const kv = k.status === 'ok' && k.data[0];
+  document.querySelectorAll('[data-source="kpis"][data-field]').forEach((el) => {
+    const f = el.dataset.field;
+    if (!kv) { el.textContent = '—'; return; }
+    if (f === 'latest') el.textContent = `最終チェック ${kv.latest}。続報のある事案 ${kv.with_updates} 件を上段に、全 ${kv.total} 件を下段の一覧にまとめています。`;
+    else if (f === 'records_sum') el.textContent = fmtN(kv.records_sum);
+    else el.textContent = kv[f];
+  });
+  document.getElementById('k-date').textContent = kv ? `${kv.latest} のチェック` : '—';
+
+  const tl = dash.data('today_log'); const tlb = document.getElementById('today-body'); tlb.replaceChildren();
+  if (tl.status === 'ok') {
+    document.getElementById('today-h').textContent = tl.data.length ? `${tl.data[0].date} のチェック：新規 ${tl.data.filter((r) => r.kind === '新規登録').length} 件・続報 ${tl.data.filter((r) => r.kind === '続報反映').length} 件` : '最新チェックの新規・続報';
+    tl.data.forEach((r) => {
+      const tr = document.createElement('tr'); tr.dataset.key = r.key;
+      const c = (t) => { const td = document.createElement('td'); td.textContent = t; return td; };
+      const ps = document.createElement('td'); const sp = document.createElement('span');
+      sp.className = 'pill ' + (r.kind === '新規登録' ? 'p-new' : 'p-upd'); sp.textContent = r.kind; ps.append(sp);
+      tr.append(ps, c(r.org), c(r.note));
+      tr.addEventListener('click', () => { st.sel = r.id; draw(); document.getElementById('detail').scrollIntoView({ block: 'start' }); });
+      tlb.append(tr);
+    });
+  } else { document.getElementById('today-h').textContent = '最新チェックの新規・続報'; }
+
+  const u = dash.data('updates'); const ub = document.getElementById('upd-body'); ub.replaceChildren();
+  if (u.status === 'ok') u.data.forEach((r) => {
+    const tr = document.createElement('tr'); tr.dataset.key = r.id;
+    const c = (t) => { const td = document.createElement('td'); td.textContent = t; return td; };
+    const ps = document.createElement('td'); ps.append(pill(r.status));
+    tr.append(c(r.last_report), c(r.org), ps, c(r.update_note));
+    tr.addEventListener('click', () => { st.sel = r.id; draw(); document.getElementById('detail').scrollIntoView({ block: 'start' }); });
+    ub.append(tr);
+  });
+
+  bars(document.getElementById('b-attack'), 'by_attack', 'attack');
+  bars(document.getElementById('b-cat'), 'by_category', 'category');
+  bars(document.getElementById('b-region'), 'by_country', 'country');
+
+  const d = dash.data('incidents'); const tb = document.getElementById('tb'); tb.replaceChildren();
+  const clear = document.getElementById('clear');
+  clear.hidden = !st.filt; clear.textContent = st.filt ? `${st.filt.v} ×` : '';
+  if (d.status !== 'ok') { showDetail(null); return; }
+  const q = st.q.trim().toLowerCase();
+  let rows = d.data.filter((r) => {
+    if (st.status && r.status !== st.status) return false;
+    if (st.filt) {
+      const v = st.filt.kind === 'attack' ? famOf(r.attack) : r[st.filt.kind];
+      if (v !== st.filt.v) return false;
+    }
+    if (q && ![r.org, r.service, r.data, r.category, r.country, r.attack].join(' ').toLowerCase().includes(q)) return false;
+    return true;
+  });
+  rows = rows.slice().sort((a, b) => {
+    const x = a[st.sortK], y = b[st.sortK];
+    if (st.sortK === 'records') return ((Number(x) || -1) - (Number(y) || -1)) * st.dir;
+    return String(x ?? '').localeCompare(String(y ?? '')) * st.dir;
+  });
+  document.querySelectorAll('#tbl th').forEach((th) => th.setAttribute('aria-sort', th.dataset.k === st.sortK ? (st.dir > 0 ? 'ascending' : 'descending') : 'none'));
+  rows.forEach((r) => {
+    const tr = document.createElement('tr'); tr.dataset.key = r.id; if (r.id === st.sel) tr.className = 'sel';
+    const c = (t, cls) => { const td = document.createElement('td'); td.textContent = t; if (cls) td.className = cls; return td; };
+    const ps = document.createElement('td'); ps.append(pill(r.status));
+    if (/主張/.test(r.verified)) { const p = document.createElement('span'); p.className = 'pill p-claim'; p.textContent = '未確認'; p.style.marginLeft = '4px'; ps.append(p); }
+    tr.append(c(r.published), c(`${r.org}｜${r.service}`), c(r.country, 'hide-n'), c(r.category, 'hide-n'), c(r.attack, 'hide-n'), c(fmtN(r.records), 'num'), ps);
+    tr.addEventListener('click', () => { st.sel = r.id; draw(); document.getElementById('detail').scrollIntoView({ block: 'start' }); });
+    tb.append(tr);
+  });
+  showDetail(d.data.find((r) => r.id === st.sel));
+}
+
+document.getElementById('q').addEventListener('input', (e) => { st.q = e.target.value; draw(); });
+document.getElementById('f-status').addEventListener('change', (e) => { st.status = e.target.value; draw(); });
+document.getElementById('clear').addEventListener('click', () => { st.filt = null; draw(); });
+document.querySelectorAll('#tbl th').forEach((th) => th.addEventListener('click', () => {
+  if (st.sortK === th.dataset.k) st.dir *= -1; else { st.sortK = th.dataset.k; st.dir = th.dataset.k === 'org' ? 1 : -1; }
+  draw();
+}));
+dash.onData(draw);
+</script>
+
+
+<footer class="site-foot">
+  <p>最終更新：2026-11-09（毎日の定期チェックで更新）</p>
+  <p>各事案は公開報道・各組織の発表・集約サイトをもとに整理したものです。正確な情報は各事案の出典と、当該組織の公式発表をご確認ください。「未確認」は攻撃者側の主張のみで、組織が認めていない事案です。</p>
+  <p>データ：<a href="data/incidents.json">incidents.json</a> ・ <a href="data/changelog.json">changelog.json</a></p>
+</footer>
+</div>
+</body>
+</html>
